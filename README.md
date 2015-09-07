@@ -1,18 +1,18 @@
-# Simple watchdog for docker containers is go
+# WatchGoD is watchdog Daemon in Go
 
 ## How to use it
 
 ```bash
-package main
-import  (
-  "os"
-  "github.com/hbouvier/system"
-)
-
-func main() {
-  watcher := system.Watchdog{}
-  watcher.Initialize()
-  watcher.Spawn(os.Args[1:])
-	watcher.WatchLoop()
-}
+$ watchgod boot &
+$ watchgod add sleeper sleep 60
+$ watchgod start sleeper
+$ watchgod add hello /bin/sh -c 'echo Hello World && sleep 15'
+$ watchgod start hello
+$ watchgod list
+$ watchgod stop hello
+$ watchgod stop sleeper
+$ watchgod start hello
+$ watchgod quit
 ```
+
+

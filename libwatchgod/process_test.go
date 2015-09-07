@@ -1,8 +1,8 @@
-package system
+package watchgod
 
 import (
-  "testing"
-  "syscall"
+	"syscall"
+	"testing"
 )
 
 func TestProcessSpawnFailure(t *testing.T) {
@@ -32,22 +32,22 @@ func TestProcessSpawnAndWait(t *testing.T) {
 }
 
 func TestProcessKill(t *testing.T) {
-  args := []string{"sleep", "10"}
-  pid, err := Spawn(args)
-  if err != nil {
-    t.Fatalf("Spawn reported an unexpect error: %s", err)
-  }
-  if pid <= 1 {
-    t.Fatalf("Spawn returned an invalid pid (must be greater than 1): pid=%d", pid)
-  }
+	args := []string{"sleep", "10"}
+	pid, err := Spawn(args)
+	if err != nil {
+		t.Fatalf("Spawn reported an unexpect error: %s", err)
+	}
+	if pid <= 1 {
+		t.Fatalf("Spawn returned an invalid pid (must be greater than 1): pid=%d", pid)
+	}
 
-  Kill(pid, syscall.SIGTERM)
+	Kill(pid, syscall.SIGTERM)
 
-  status, err := Wait(pid)
-  if err != nil {
-    t.Fatalf("Wait reported an unexpect error: %s", err)
-  }
-  if status != -1 {
-    t.Fatalf("Spawn expect exit code to be zeros: status=%d", status)
-  }
+	status, err := Wait(pid)
+	if err != nil {
+		t.Fatalf("Wait reported an unexpect error: %s", err)
+	}
+	if status != -1 {
+		t.Fatalf("Spawn expect exit code to be zeros: status=%d", status)
+	}
 }

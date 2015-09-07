@@ -1,0 +1,12 @@
+{
+    "Processes" : [
+      {
+        "Name" : "hello",
+        "Command" : ["/bin/sh", "-c", "echo Hello World && sleep 10"]
+      },
+      {
+        "Name" : "sleeper",
+        "Command" : ["sleep", "30"]
+      }
+    ]
+}
