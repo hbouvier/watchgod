@@ -1,9 +1,10 @@
-# WatchGoD is watchdog Daemon in Go
+# WatchGOd is watchdog Daemon in Go
 
 ## How to use it
 
 ```bash
 $ watchgod boot &
+$ watchgod version
 $ watchgod add sleeper sleep 60
 $ watchgod start sleeper
 $ watchgod add hello /bin/sh -c 'echo Hello World && sleep 15'
@@ -12,7 +13,8 @@ $ watchgod list
 $ watchgod stop hello
 $ watchgod stop sleeper
 $ watchgod start hello
-$ watchgod quit
+$ watchgod restart hello
+$ watchgod terminate
 ```
 
 

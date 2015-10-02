@@ -3,10 +3,10 @@ package watchgod
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 )
 
 func (w *Watchgod) setupSingalHandlers() {
@@ -14,135 +14,180 @@ func (w *Watchgod) setupSingalHandlers() {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		sig := <-sigs
-		fmt.Fprintf(os.Stderr, "\n"+Timestamp()+"[watchgod] TERMINATE >>> due to signal '%s'\n", sig)
-		w.eventQueue <- Event{eventType: TERMINATE, response: make(chan RPCResponse, 1)}
+		fmt.Printf("\n")
+		log.Printf("[FATAL] [watchgod] TERMINATE >>> due to signal '%s'\n", sig)
+		w.eventChannel <- Event{eventType: TERMINATE, response: make(chan RPCResponse, 1)}
 	}()
 }
 
-func (w *Watchgod) spawn(id int, process Process, stable *chan error) (int, error) {
-	pid, spawnErr := Spawn(process.commandTokens)
-	if spawnErr != nil {
-		fmt.Fprintf(os.Stderr, Timestamp()+"[watchgod] [0] %-20s ERROR spawning process (%v) >>> %s\n",
-			process.name, process.commandTokens, spawnErr)
-		return -1, spawnErr
-	}
-
+func (w *Watchgod) startResponseSink() chan RPCResponse {
+	responseSink := make(chan RPCResponse, 1)
 	go func() {
-		exitcode, waitErr := Wait(pid)
-		if stable != nil {
-			*stable <- errors.New(fmt.Sprintf("%s [%d]: exited with %d", process.name, pid, exitcode))
-		}
-		if waitErr != nil {
-			fmt.Fprintf(os.Stderr,
-				Timestamp()+"[watchgod] [%d] %-20s ERROR monitoring process >>> %s\n", pid, process.name, waitErr)
-		}
-		if w.terminating == false {
-			w.eventQueue <- Event{id: id, name: process.name, eventType: EXITED, exitcode: exitcode,
-				response: make(chan RPCResponse, 1)}
-		} else {
-			fmt.Fprintf(os.Stdout, Timestamp()+"[watchgod] [%d] %-20s TERMINATING(%d) %s->DEAD\n",
-				pid, process.name, exitcode, process.state)
-
+		for w.terminating == false {
+			<-responseSink
 		}
 	}()
-	return pid, nil
+	return responseSink
 }
 
-func (w *Watchgod) terminate() {
-	w.mutex.Lock()
+func (w *Watchgod) startMonitor(responseSink chan RPCResponse) {
+	go func() {
+		for w.terminating == false {
+			state := <-w.ripperChannel
+			if state.state == DEAD && w.terminating == false {
+				w.eventChannel <- Event{eventType: START, id: state.id, response: responseSink}
+			}
+		}
+	}()
+}
+
+func (w *Watchgod) runEventLoop(responseSink chan RPCResponse) {
+	for event := range w.eventChannel {
+		switch event.eventType {
+		case LIST:
+			buffer := fmt.Sprintf(" %-4s  %-20s %-10s\n---------------------------------------\n", "PID", "NAME", "STATE")
+			for _, process := range w.processes {
+				buffer += fmt.Sprintf("[%4d] %-20s %-10s\n", process.pid, process.id, process.state)
+			}
+			event.response <- RPCResponse{err: nil, msg: buffer} // Do not use sendResponse() to avoid poluting the logs
+
+		case TERMINATE:
+			w.terminate(event)
+
+		case CREATE:
+			w.create(event)
+
+		case START:
+			w.start(event, responseSink)
+
+		case STOP:
+			w.stop(event)
+
+		case RESTART:
+			w.restart(event)
+
+		default:
+			Fatal("[watchgod] MainLoop unknown event >>> %v", event)
+		}
+	}
+}
+
+func (w *Watchgod) terminate(event Event) {
 	w.terminating = true
 	for _, process := range w.processes {
 		if process.pid > 0 && process.state != DEAD {
 			Kill(process.pid, syscall.SIGTERM)
 		}
 	}
-	w.mutex.Unlock()
 	for _, process := range w.processes {
 		if process.pid > 0 && process.state != DEAD {
 			Wait(process.pid)
 		}
 	}
-	close(w.eventQueue)
+	close(w.eventChannel)
+	log.Printf("[INFO] [watchgod] terminated\n")
+	sendResponse(event.response, RPCResponse{err: nil, msg: "WatchGOd: terminated"})
 }
 
-func (w *Watchgod) start(event Event, timeoutInSeconds int) {
-	var message string
-	stable := make(chan error, 1)
-	pid, err := w.spawn(event.id, w.processes[event.id], &stable)
+func (w *Watchgod) create(event Event) {
+	_, err := w.findById(event.id)
 	if err != nil {
-		message = fmt.Sprintf("[%d] %-20s %s %s >>> %s",
-			pid, event.name, event.eventType, w.processes[event.id].state, err)
-		fmt.Fprintf(os.Stdout, Timestamp()+"[watchgod] %s\n", message)
-		event.response <- RPCResponse{err: errors.New(message), msg: ""}
+		process := newProcess(event.id, event.arguments, w.ripperChannel)
+		w.processes = append(w.processes, &process)
+		sendResponse(event.response, RPCResponse{err: nil, msg: fmt.Sprintf("%s: created", event.id)})
 	} else {
-		fmt.Fprintf(os.Stdout, Timestamp()+"[watchgod] [%d] %-20s %s %s->...staring...\n",
-			pid, event.name, event.eventType, w.processes[event.id].state)
-		timeout := make(chan bool, 1)
-		go func() {
-			time.Sleep(time.Duration(timeoutInSeconds) * time.Second)
-			timeout <- true
-		}()
-		select {
-		case e := <-stable:
-			message = fmt.Sprintf("[%d] %-20s %s %s >>> %s",
-				pid, event.name, event.eventType, w.processes[event.id].state, e)
-			fmt.Fprintf(os.Stdout, Timestamp()+"[watchgod] %s\n", message)
-			event.response <- RPCResponse{err: errors.New(message), msg: ""}
-		case <-timeout:
-			message = fmt.Sprintf("[%d] %-20s %s ...starting...->RUNNING",
-				pid, event.name, event.eventType)
-			w.processes[event.id].pid = pid
-			w.processes[event.id].state = RUNNING
-			fmt.Fprintf(os.Stdout, Timestamp()+"[watchgod] %s\n", message)
-			event.response <- RPCResponse{err: nil, msg: message}
-		}
+		sendResponse(event.response, RPCResponse{err: errors.New(fmt.Sprintf("%s: already exist", event.id))})
 	}
+}
+
+func (w *Watchgod) start(event Event, responseSink chan RPCResponse) {
+	process, err := w.findById(event.id)
+	if err != nil {
+		sendResponse(event.response, RPCResponse{err: err})
+		return
+	}
+	monitor := make(chan ProcessInfo, 1)
+
+	go func(event Event, process *MonitoredProcess, monitor chan ProcessInfo) {
+		processInfo := process.waitForNextEvent(monitor, w.startTimeoutInSeconds)
+		if processInfo.state == RUNNING {
+			processInfo = process.waitForNextEvent(monitor, w.startTimeoutInSeconds)
+		}
+		switch processInfo.state {
+		case DEAD:
+			w.eventChannel <- Event{eventType: STOP, id: processInfo.id, response: responseSink}
+			sendResponse(event.response, RPCResponse{err: errors.New(fmt.Sprintf("%s: [DISABLED] PID %d exited at launch with code %d", event.id, processInfo.pid, processInfo.exitcode))})
+		case TIMEOUT:
+			sendResponse(event.response, RPCResponse{msg: fmt.Sprintf("%s: started with PID %d", event.id, processInfo.pid)})
+		default:
+			sendResponse(event.response, RPCResponse{err: processInfo.err})
+		}
+	}(event, process, monitor)
+	process.start(monitor)
 }
 
 func (w *Watchgod) stop(event Event) {
-	pid := w.processes[event.id].pid
-	oldstate := RUNNING
-	var newstate State
-	if event.eventType == STOP {
-		newstate = STOPPED
-	} else if event.eventType == RESTART {
-		newstate = RESTARTING
-	} else {
-		Fatal("Unknow event type %s (expecting STOP or RESTART)", event.eventType)
+	process, err := w.findById(event.id)
+	if err != nil {
+		sendResponse(event.response, RPCResponse{err: err})
+		return
 	}
-	message := fmt.Sprintf("[%d] %-20s %s %s->%s",
-		pid, event.name, event.eventType, oldstate, newstate)
-	w.processes[event.id].state = newstate
-	if pid > 0 {
-		Kill(pid, syscall.SIGTERM)
-		go func(event Event, pid int, message string) {
-			Wait(pid)
-			time.Sleep(1000 * time.Millisecond)
-			if w.terminating == false {
-				switch w.processes[event.id].state {
-				case RESTARTING:
-					w.eventQueue <- Event{eventType: RESTART_START, name: event.name, id: event.id, response: event.response}
-				case STOPPED:
-					message := fmt.Sprintf("[%d] %-20s %s DEAD->STOPPED",
-						w.processes[event.id].pid, event.name, event.eventType)
-					fmt.Fprintf(os.Stdout, Timestamp()+"[watchgod] %s\n", message)
-					event.response <- RPCResponse{err: nil, msg: message}
-				default:
-					Fatal("Unknow state: %s", w.processes[event.id].state)
-				}
-			}
-		}(event, pid, message)
-	} else {
-		event.response <- RPCResponse{err: errors.New(message), msg: ""}
-	}
-	fmt.Fprintf(os.Stdout, Timestamp()+"[watchgod] %s\n", message)
+	monitor := make(chan ProcessInfo, 1)
+	process.interceptRipperChannel(monitor) // to avoid the default restart policy
+	go func(event Event, process *MonitoredProcess, monitor chan ProcessInfo) {
+		processInfo := process.waitForNextEvent(monitor, w.stopTimeoutInSeconds)
+		switch processInfo.state {
+		case DEAD:
+			sendResponse(event.response, RPCResponse{msg: fmt.Sprintf("%s: stopped", event.id)})
+		case TIMEOUT:
+			sendResponse(event.response, RPCResponse{err: errors.New(fmt.Sprintf("%s: [TIMEOUT] is still running", event.id))})
+		default:
+			sendResponse(event.response, RPCResponse{err: processInfo.err})
+		}
+		process.releaseRipperChannel(monitor)
+	}(event, process, monitor)
+	process.stop(monitor)
 }
 
-func (w *Watchgod) findProcessByName(name string) int {
+func (w *Watchgod) restart(event Event) {
+	process, err := w.findById(event.id)
+	if err != nil {
+		sendResponse(event.response, RPCResponse{err: err})
+		return
+	}
+	monitor := make(chan ProcessInfo, 1)
+	process.interceptRipperChannel(monitor) // to restart if it's already DEAD or when it dies instead of the default policy
+	go func(event Event, process *MonitoredProcess, monitor chan ProcessInfo) {
+		processInfo := process.waitForNextEvent(monitor, w.stopTimeoutInSeconds)
+		process.releaseRipperChannel(monitor)
+		switch processInfo.state {
+		case DEAD:
+			w.eventChannel <- Event{eventType: START, id: processInfo.id, response: event.response}
+		case ALREADYDEAD:
+			w.eventChannel <- Event{eventType: START, id: processInfo.id, response: event.response}
+		case TIMEOUT:
+			sendResponse(event.response, RPCResponse{err: errors.New(fmt.Sprintf("%s: [TIMEOUT] is still running", event.id))})
+		default:
+			sendResponse(event.response, RPCResponse{err: processInfo.err})
+		}
+	}(event, process, monitor)
+	process.stop(monitor)
+}
+
+func sendResponse(output chan RPCResponse, response RPCResponse) {
+	if response.err != nil {
+		log.Printf("[ERROR] [watchgod] %s", response.err)
+	} else {
+		log.Printf("[INFO] [watchgod] %s", response.msg)
+	}
+	output <- response
+}
+
+func (w *Watchgod) findById(id string) (*MonitoredProcess, error) {
 	for i := 0; i < len(w.processes); i++ {
-		if w.processes[i].name == name {
-			return i
+		if w.processes[i].id == id {
+			return w.processes[i], nil
 		}
 	}
-	return -1
+	return nil, errors.New(fmt.Sprintf("%s: not found", id))
 }

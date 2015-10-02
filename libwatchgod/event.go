@@ -5,17 +5,17 @@ import "fmt"
 type EventType int
 
 const ( // iota is reset to 0
-	START EventType = 1 << iota
-	STOP
-	RESTART
-	RESTART_START
-	TERMINATE
-	EXITED
+	CREATE  EventType = 1 << iota // New process without starting it
+	START                         // Start an already created process
+	STOP                          // Stop a running process
+	RESTART                       // Restart a running or stopped process
+	LIST
+	TERMINATE // Terminate the Watch GO Deamon (and all processes)
 )
 
 type Event struct {
-	id        int
-	name      string
+	id        string
+	arguments []string
 	eventType EventType
 	exitcode  int
 	response  chan RPCResponse
@@ -24,18 +24,18 @@ type Event struct {
 func (event EventType) String() string {
 	var s string
 	switch event {
+	case CREATE:
+		s = "CREATE"
 	case START:
 		s = "START"
 	case STOP:
 		s = "STOP"
 	case RESTART:
 		s = "RESTART"
-	case RESTART_START:
-		s = "RESTART_START"
+	case LIST:
+		s = "LIST"
 	case TERMINATE:
 		s = "TERMINATE"
-	case EXITED:
-		s = "EXITED"
 	default:
 		s = fmt.Sprintf("[ERROR] Unknown event-type: %d", event)
 	}

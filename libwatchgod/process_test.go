@@ -8,7 +8,7 @@ import (
 func TestProcessSpawnFailure(t *testing.T) {
 	_, err := Spawn([]string{"/does_not_exist"})
 	if err == nil {
-		t.Fatalf("Sawn failed to report an error when the process does not exist.")
+		t.Fatalf("Spawn failed to report an error when the process does not exist.")
 	}
 }
 
@@ -32,7 +32,7 @@ func TestProcessSpawnAndWait(t *testing.T) {
 }
 
 func TestProcessKill(t *testing.T) {
-	args := []string{"sleep", "10"}
+	args := []string{"sleep", "60"}
 	pid, err := Spawn(args)
 	if err != nil {
 		t.Fatalf("Spawn reported an unexpect error: %s", err)

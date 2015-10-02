@@ -3,15 +3,22 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/hashicorp/logutils"
 	"github.com/hbouvier/watchgod/libwatchgod"
+	"log"
 	"net/rpc"
 	"os"
 )
 
+var VERSION = "1.0.1"
+
 // When starting a process Wait on it to see if it will exit int
 // that time. If it does return an error, otherwise assume that it
 // is stable.
-var gStartTimeoutInSeconds int = 2
+var gStartTimeoutInSeconds int = 1
+var gStopTimeoutInSeconds int = 5
+var gIPCServerURL string = "127.0.0.1:7099"
+var gLogLevel string = "INFO"
 
 type Process struct {
 	Name    string
@@ -19,64 +26,90 @@ type Process struct {
 }
 
 type Configuration struct {
-	Processes []Process
+	LogLevel              string
+	IPCServerURL          string
+	StartTimeoutInSeconds int // Wait in seconds to see if process exit, before returning OK
+	StopTimeoutInSeconds  int // Wait in seconds for process to die, before returning FAILURE
+	Processes             []Process
 }
 
 func main() {
+	setLogger(defaultConfiguration().LogLevel)
 	if len(os.Args) < 2 {
 		usage()
 	} else if len(os.Args) == 2 {
 		if os.Args[1] == "boot" {
-			boot(ipcServerUrl(), []Process{})
+			configuration := defaultConfiguration()
+			boot(ipcServerUrl(configuration.IPCServerURL), configuration)
 		} else if os.Args[1] == "list" {
-			list(ipcServerUrl())
+			list(ipcServerUrl(defaultConfiguration().IPCServerURL))
 		} else if os.Args[1] == "terminate" {
-			terminate(ipcServerUrl())
+			terminate(ipcServerUrl(defaultConfiguration().IPCServerURL))
+		} else if os.Args[1] == "version" {
+			fmt.Printf("Client version %s\n", VERSION)
+			version(ipcServerUrl(defaultConfiguration().IPCServerURL))
 		} else {
 			usage()
 		}
 	} else if len(os.Args) == 3 {
-		if os.Args[1] == "config" {
+		if os.Args[1] == "boot" {
 			configuration := loadConfiguration(os.Args[2])
-			fmt.Printf("config[%s]: %v\n", os.Args[2], configuration)
-			boot(ipcServerUrl(), configuration.Processes)
+			setLogger(configuration.LogLevel)
+			boot(ipcServerUrl(configuration.IPCServerURL), configuration)
 		} else if os.Args[1] == "start" {
-			start(ipcServerUrl(), os.Args[2])
+			start(ipcServerUrl(defaultConfiguration().IPCServerURL), os.Args[2])
 		} else if os.Args[1] == "stop" {
-			stop(ipcServerUrl(), os.Args[2])
+			stop(ipcServerUrl(defaultConfiguration().IPCServerURL), os.Args[2])
 		} else if os.Args[1] == "restart" {
-			restart(ipcServerUrl(), os.Args[2])
+			restart(ipcServerUrl(defaultConfiguration().IPCServerURL), os.Args[2])
 		} else {
 			usage()
 		}
 	} else if len(os.Args) > 3 && os.Args[1] == "add" {
-		add(ipcServerUrl(), os.Args[2:])
+		add(ipcServerUrl(defaultConfiguration().IPCServerURL), os.Args[2:])
 	} else {
 		usage()
 	}
 }
 
 func usage() {
-	watchgod.Fatal("USAGE %s boot|quit|add|start|stop", os.Args[0])
+	watchgod.FatalCli("USAGE %s list|start {name}|stop {name}|restart {name}|boot {config.json}|add {id} {args...}|terminate|version", os.Args[0])
 }
 
-func boot(url string, processes []Process) {
+func setLogger(level string) {
+	filter := &logutils.LevelFilter{
+		Levels:   []logutils.LogLevel{"DEBUG", "INFO", "WARN", "ERROR", "FATAL"},
+		MinLevel: logutils.LogLevel(level),
+		Writer:   os.Stderr,
+	}
+	log.SetOutput(filter)
+}
+
+func boot(url string, configuration Configuration) {
 	watcher := new(watchgod.Watchgod)
-	watcher.Initialize(gStartTimeoutInSeconds)
+	watcher.Initialize(VERSION, configuration.StartTimeoutInSeconds, configuration.StopTimeoutInSeconds)
 	watchgod.StartIPCServer(url, watcher)
-	go func() {
+	go func(watcher *watchgod.Watchgod) {
 		response := make(chan watchgod.RPCResponse, 1)
 		go func() {
 			for {
 				<-response
 			}
 		}()
-		for _, process := range processes {
+		for _, process := range configuration.Processes {
 			watcher.Add(process.Name, process.Command, response)
 			watcher.Start(process.Name, response)
 		}
-	}()
+	}(watcher)
 	watcher.MainLoop()
+}
+
+func defaultConfiguration() Configuration {
+	return Configuration{StartTimeoutInSeconds: gStartTimeoutInSeconds,
+		StopTimeoutInSeconds: gStopTimeoutInSeconds,
+		IPCServerURL:         gIPCServerURL,
+		LogLevel:             gLogLevel,
+		Processes:            make([]Process, 0)}
 }
 
 func loadConfiguration(filename string) Configuration {
@@ -87,12 +120,16 @@ func loadConfiguration(filename string) Configuration {
 	defer file.Close()
 
 	decoder := json.NewDecoder(file)
-	configuration := Configuration{}
+	configuration := defaultConfiguration()
 	decoderErr := decoder.Decode(&configuration)
 	if decoderErr != nil {
 		watchgod.Fatal("%s: ERROR decoding configuration file %s >>> %s\n", os.Args[0], filename, decoderErr)
 	}
 	return configuration
+}
+
+func version(url string) {
+	fmt.Println(ipcInvoke(url, "Version", "*"))
 }
 
 func list(url string) {
@@ -119,7 +156,7 @@ func add(url string, args []string) {
 	var reply string
 	err := client(url).Call("IPCServer.Add", args, &reply)
 	if err != nil {
-		watchgod.Fatal("Error: %s", err)
+		watchgod.FatalCli("Error: %s", err)
 	}
 	fmt.Printf("%s\n", reply)
 }
@@ -128,7 +165,7 @@ func ipcInvoke(url string, method string, argument string) string {
 	var reply string
 	err := client(url).Call("IPCServer."+method, argument, &reply)
 	if err != nil {
-		watchgod.Fatal("Error: %s", err)
+		watchgod.FatalCli("Error: %s", err)
 	}
 	return fmt.Sprintf("%s", reply)
 }
@@ -136,15 +173,18 @@ func ipcInvoke(url string, method string, argument string) string {
 func client(url string) *rpc.Client {
 	client, err := rpc.DialHTTP("tcp", url)
 	if err != nil {
-		watchgod.Fatal("Error connecting: %s", err)
+		watchgod.FatalCli("Error connecting: %s", err)
 	}
 	return client
 }
 
-func ipcServerUrl() string {
-	url := os.Getenv("watchgod_IPC_URL")
-	if url == "" {
-		url = "127.0.0.1:7099"
+func ipcServerUrl(config_url string) string {
+	var url string
+
+	if env_url := os.Getenv("WATCHGOD_IPC_URL"); env_url != "" {
+		url = env_url
+	} else {
+		url = config_url
 	}
 	return url
 }

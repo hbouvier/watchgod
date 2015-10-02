@@ -1,4 +1,8 @@
 {
+    "StartTimeoutInSeconds": 1,
+    "StopTimeoutInSeconds": 10,
+    "IPCServerUrl" : "127.0.0.1:7099",
+    "LogLevel" : "DEBUG",
     "Processes" : [
       {
         "Name" : "hello",
