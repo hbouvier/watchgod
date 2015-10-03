@@ -1,0 +1,10 @@
+language: go
+
+go:
+  - 1.5
+
+install:
+  - go get github.com/hashicorp/logutils
+
+script: go test -v ./libwatchgod/...
+
