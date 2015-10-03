@@ -91,3 +91,18 @@ WatchGOd: terminated
     ]
 }
 ```
+
+## Build
+
+To build this project on your computer if you already have go-lang installed
+
+```bash
+$ make
+```
+
+Or if you want to build a linux version using docker:
+
+```bash
+$ make GOCC="docker run --rm -t -v ${GOPATH}:/go hbouvier/go-lang:1.5"
+```
+
