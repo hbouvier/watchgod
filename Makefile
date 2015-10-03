@@ -5,6 +5,9 @@ GOCC=go
 
 all: get-deps build
 
+clean:
+	rm -f coverage.out
+
 build: fmt test
 	${GOCC} install github.com/hbouvier/watchgod
 
@@ -13,7 +16,8 @@ fmt:
 	${GOCC} fmt github.com/hbouvier/watchgod/libwatchgod
 
 test:
-	${GOCC} test -v -cpu 4 -count 1 ./libwatchgod/...
+	${GOCC} test -v -cpu 4 -count 1 -coverprofile=coverage.out ./libwatchgod/...
+	${GOCC} tool cover -html=coverage.out
 
 get-deps:
 	${GOCC} get github.com/hashicorp/logutils

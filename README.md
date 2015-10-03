@@ -1,8 +1,9 @@
 [![Build Status](https://travis-ci.org/hbouvier/watchgod.png)](https://travis-ci.org/hbouvier/watchgod)
+[![Coverage Status](https://coveralls.io/repos/hbouvier/watchgod/badge.svg?branch=master)](https://coveralls.io/r/hbouvier/watchgod?branch=master)
 
-# WatchGOd is a Deamon process WATCHer written in GO
+# WatchGOd
 
-WatchGOd can be useful as the **init** process of docker containers. It will automatically restart a dying process. With WatchGOd, you can also manage the lifecycle of a process: start, retstart and stop.
+WatchGOd is a Deamon process WATCHer written in GO that can be useful as the **init** process of docker containers. It will automatically restart a dying process. With WatchGOd, you can also manage the lifecycle of a process: start, retstart and stop.
 
 ## Simple Use cases
 
