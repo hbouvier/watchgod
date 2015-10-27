@@ -16,7 +16,7 @@ fmt:
 	${GOCC} fmt github.com/hbouvier/watchgod/libwatchgod
 
 test:
-	${GOCC} test -v -cpu 4 -count 1 -coverprofile=coverage.out ./libwatchgod/...
+	${GOCC} test -v -cpu 4 -count 1 -coverprofile=coverage.out github.com/hbouvier/watchgod/libwatchgod/...
 	${GOCC} tool cover -html=coverage.out
 
 get-deps:

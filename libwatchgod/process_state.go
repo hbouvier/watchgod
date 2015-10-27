@@ -9,7 +9,6 @@ const ( // iota is reset to 0
 	ALREADYDEAD
 	RUNNING
 	STOPPED
-	RESTARTING
 	TIMEOUT
 	ERROR
 )
@@ -25,8 +24,6 @@ func (state ProcessState) String() string {
 		s = "RUNNING"
 	case STOPPED:
 		s = "STOPPED"
-	case RESTARTING:
-		s = "RESTARTING"
 	case TIMEOUT:
 		s = "TIMEOUT"
 	case ERROR:

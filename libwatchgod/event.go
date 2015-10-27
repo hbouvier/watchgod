@@ -18,6 +18,7 @@ type Event struct {
 	arguments []string
 	eventType EventType
 	exitcode  int
+	requestId int
 	response  chan RPCResponse
 }
 

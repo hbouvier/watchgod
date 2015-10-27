@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 func (w *Watchgod) setupSingalHandlers() {
@@ -35,7 +36,14 @@ func (w *Watchgod) startMonitor(responseSink chan RPCResponse) {
 		for w.terminating == false {
 			state := <-w.ripperChannel
 			if state.state == DEAD && w.terminating == false {
-				w.eventChannel <- Event{eventType: START, id: state.id, response: responseSink}
+				go func(state ProcessInfo) {
+					if state.pauseInSeconds > 0 && w.terminating == false {
+						time.Sleep(time.Duration(state.pauseInSeconds) * time.Second)
+					}
+					if w.terminating == false {
+						w.eventChannel <- Event{eventType: START, id: state.id, requestId: state.requestId, response: responseSink}
+					}
+				}(state)
 			}
 		}
 	}()
@@ -75,12 +83,12 @@ func (w *Watchgod) runEventLoop(responseSink chan RPCResponse) {
 func (w *Watchgod) terminate(event Event) {
 	w.terminating = true
 	for _, process := range w.processes {
-		if process.pid > 0 && process.state != DEAD {
+		if process.state != DEAD && process.state != STOPPED && process.pid > 0 {
 			Kill(process.pid, syscall.SIGTERM)
 		}
 	}
 	for _, process := range w.processes {
-		if process.pid > 0 && process.state != DEAD {
+		if process.state != DEAD && process.state != STOPPED && process.pid > 0 {
 			Wait(process.pid)
 		}
 	}
@@ -106,6 +114,10 @@ func (w *Watchgod) start(event Event, responseSink chan RPCResponse) {
 		sendResponse(event.response, RPCResponse{err: err})
 		return
 	}
+	if event.requestId != 0 && event.requestId != process.requestId {
+		sendResponse(event.response, RPCResponse{err: errors.New(fmt.Sprintf("%s: PID %d start stale requestId:%d, current requestId is: %d", process.id, process.pid, event.requestId, process.requestId))})
+		return
+	}
 	monitor := make(chan ProcessInfo, 1)
 
 	go func(event Event, process *MonitoredProcess, monitor chan ProcessInfo) {
@@ -115,8 +127,7 @@ func (w *Watchgod) start(event Event, responseSink chan RPCResponse) {
 		}
 		switch processInfo.state {
 		case DEAD:
-			w.eventChannel <- Event{eventType: STOP, id: processInfo.id, response: responseSink}
-			sendResponse(event.response, RPCResponse{err: errors.New(fmt.Sprintf("%s: [DISABLED] PID %d exited at launch with code %d", event.id, processInfo.pid, processInfo.exitcode))})
+			sendResponse(event.response, RPCResponse{err: errors.New(fmt.Sprintf("%s: PID %d exited at launch with code %d", event.id, processInfo.pid, processInfo.exitcode))})
 		case TIMEOUT:
 			sendResponse(event.response, RPCResponse{msg: fmt.Sprintf("%s: started with PID %d", event.id, processInfo.pid)})
 		default:

@@ -11,9 +11,13 @@ import (
 func main() {
 	configuration := watchgod.DefaultConfiguration()
 	configurationFilenamePtr := flag.String("config", "", "configuration filename.json")
+	levelPtr := flag.String("level", "", "logging level")
 	flag.Parse()
 	if *configurationFilenamePtr != "" {
 		configuration = watchgod.LoadConfiguration(*configurationFilenamePtr)
+	}
+	if *levelPtr != "" {
+		configuration.LogLevel = *levelPtr
 	}
 	setLogger(configuration.LogLevel)
 	watchgod.ExecuteArgument(flag.Args(), configuration, usage)
