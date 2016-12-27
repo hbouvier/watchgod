@@ -20,7 +20,7 @@ $ sleep 11 && watchgod terminate
 
 ```bash
 $ echo '{"Processes":[{"Name" : "sleeper","Command" : ["/bin/sh", "-c", "echo ZZZZZ && sleep 10"]}]}' > /tmp/configuration.json
-$ watchgod boot /tmp/configuration.json &
+$ watchgod -config /tmp/configuration.json boot &
 $ sleep 11 && watchgod terminate
 ```
 
@@ -28,7 +28,7 @@ $ sleep 11 && watchgod terminate
 
 ```bash
 $ echo '{"Processes":[{"Name" : "sleeper","Command" : ["/bin/sh", "-c", "echo ZZZZZ && sleep 60"]}]}' > /tmp/configuration.json
-$ watchgod boot /tmp/configuration.json &
+$ watchgod -config /tmp/configuration.json boot &
 015/10/03 09:43:31 [INFO] [ipcserver] Starting IPC Server on 127.0.0.1:7099
 2015/10/03 09:43:31 [INFO] [watchgod] Daemon version 1.0.1 started...
 2015/10/03 09:43:31 [INFO] [watchgod] sleeper: created
