@@ -4,37 +4,60 @@ VERSION=v1.0.3
 #
 # make GOCC="docker run --rm -t -v ${GOPATH}:/go hbouvier/go-lang:1.5"
 
-all: get-deps build
+USERNAME=hbouvier
+PROJECTNAME=watchgod
+
+# all: get-deps fmt darwin linux arm windows build coverage
+all: get-deps fmt darwin linux arm build coverage
 
 clean:
-	rm -f coverage.out
+	rm -rf coverage.out \
+	       ${GOPATH}/pkg/{linux_amd64,darwin_amd64,linux_arm}/github.com/${USERNAME}/${PROJECTNAME} \
+	       ${GOPATH}/bin/{linux_amd64,darwin_amd64,linux_arm}/${PROJECTNAME} \
+	       release
 
 build: fmt test
-	${GOCC} install github.com/hbouvier/watchgod
+	${GOCC} install github.com/${USERNAME}/${PROJECTNAME}
 
 fmt:
-	${GOCC} fmt github.com/hbouvier/watchgod
-	${GOCC} fmt github.com/hbouvier/watchgod/libwatchgod
+	${GOCC} fmt github.com/${USERNAME}/${PROJECTNAME}
+	${GOCC} fmt github.com/${USERNAME}/${PROJECTNAME}/lib${PROJECTNAME}
 
 test:
-	${GOCC} test -v -cpu 4 -count 1 -coverprofile=coverage.out github.com/hbouvier/watchgod/libwatchgod/...
+	# ${GOCC} test -v -cpu 4 -count 1 -coverprofile=coverage.out github.com/${USERNAME}/${PROJECTNAME}
+	${GOCC} test -v -cpu 4 -count 1 -coverprofile=coverage.out github.com/${USERNAME}/${PROJECTNAME}/lib${PROJECTNAME}/...
+
+coverage:
 	${GOCC} tool cover -html=coverage.out
 
 get-deps:
 	${GOCC} get github.com/hashicorp/logutils
 
-release_darwin_amd64:
-	rm -rf "release/bin/darwin_amd64" "${GOPATH}/bin/watchgod"
-	mkdir -p release/bin/darwin_amd64
-	go install github.com/hbouvier/watchgod
-	cp ${GOPATH}/bin/watchgod release/bin/darwin_amd64/
+linux:
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 ${GOCC} install github.com/${USERNAME}/${PROJECTNAME}
+	@if [[ $(shell uname | tr '[:upper:]' '[:lower:]') == $@ ]] ; then mkdir -p ${GOPATH}/bin/$@_amd64 && mv ${GOPATH}/bin/${PROJECTNAME} ${GOPATH}/bin/$@_amd64/ ; fi
 
-release_linux_adm64:
-	rm -rf "release/bin/linux_adm64" "${GOPATH}/bin/watchgod"
-	mkdir -p release/bin/linux_adm64
-	docker run --rm -t -v ${GOPATH}:/go hbouvier/go-lang:1.5 install github.com/hbouvier/watchgod
-	cp ${GOPATH}/bin/watchgod release/bin/linux_adm64/
+darwin:
+	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 ${GOCC} install github.com/${USERNAME}/${PROJECTNAME}
+	@if [[ $(shell uname | tr '[:upper:]' '[:lower:]') == $@ ]] ; then mkdir -p ${GOPATH}/bin/$@_amd64 && mv ${GOPATH}/bin/${PROJECTNAME} ${GOPATH}/bin/$@_amd64/ ; fi
 
-archives: release_darwin_amd64 release_linux_adm64
-	cd release && zip -r watchgod_${VERSION}.zip bin/
-	cd release && COPYFILE_DISABLE=1 tar cvzf watchgod_${VERSION}.tgz  bin/
+arm:
+	GOOS=linux GOARCH=arm CGO_ENABLED=0 ${GOCC} install github.com/${USERNAME}/${PROJECTNAME}
+	@if [[ $(shell uname | tr '[:upper:]' '[:lower:]') == $@ ]] ; then mkdir -p ${GOPATH}/bin/$@_amd64 && mv ${GOPATH}/bin/${PROJECTNAME} ${GOPATH}/bin/$@_amd64/ ; fi
+
+windows:
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 ${GOCC} install github.com/${USERNAME}/${PROJECTNAME}
+	@if [[ $(shell uname | tr '[:upper:]' '[:lower:]') == $@ ]] ; then mkdir -p ${GOPATH}/bin/$@_amd64 && mv ${GOPATH}/bin/${PROJECTNAME}.exe ${GOPATH}/bin/$@_amd64/ ; fi
+
+# release: linux darwin arm windows
+# 	@mkdir -p release/bin/{linux_amd64,darwin_amd64,linux_arm,windows_amd64}
+# 	for i in linux_amd64 darwin_amd64 linux_arm; do cp ${GOPATH}/bin/$${i}/${PROJECTNAME} release/bin/$${i}/ ; done
+# 	cp ${GOPATH}/bin/windows_amd64/${PROJECTNAME}.exe release/bin/windows_amd64/
+# 	COPYFILE_DISABLE=1 tar cvzf release/${PROJECTNAME}.v`cat VERSION`.tgz release/bin
+# 	zip -r release/${PROJECTNAME}.v`cat VERSION`.zip release/bin
+
+release: linux darwin arm
+	@mkdir -p release/bin/{linux_amd64,darwin_amd64,linux_arm}
+	for i in linux_amd64 darwin_amd64 linux_arm; do cp ${GOPATH}/bin/$${i}/${PROJECTNAME} release/bin/$${i}/ ; done
+	COPYFILE_DISABLE=1 tar cvzf release/${PROJECTNAME}.v`cat VERSION`.tgz release/bin
+	zip -r release/${PROJECTNAME}.v`cat VERSION`.zip release/bin
