@@ -12,7 +12,7 @@ import (
 
 func (w *Watchgod) setupSingalHandlers() {
 	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 	go func() {
 		sig := <-sigs
 		fmt.Printf("\n")

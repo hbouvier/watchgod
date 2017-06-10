@@ -1,5 +1,5 @@
 GOCC=go
-VERSION=v1.0.3
+VERSION=v1.0.4
 # To Compile the linux version using docker simply invoke the makefile like this:
 #
 # make GOCC="docker run --rm -t -v ${GOPATH}:/go hbouvier/go-lang:1.5"
@@ -59,5 +59,5 @@ windows:
 release: linux darwin arm
 	@mkdir -p release/bin/{linux_amd64,darwin_amd64,linux_arm}
 	for i in linux_amd64 darwin_amd64 linux_arm; do cp ${GOPATH}/bin/$${i}/${PROJECTNAME} release/bin/$${i}/ ; done
-	COPYFILE_DISABLE=1 tar cvzf release/${PROJECTNAME}.v`cat VERSION`.tgz release/bin
-	zip -r release/${PROJECTNAME}.v`cat VERSION`.zip release/bin
+	cd release && COPYFILE_DISABLE=1 tar cvzf ${PROJECTNAME}.${VERSION}.tgz bin
+	cd release && zip -r ${PROJECTNAME}.${VERSION}.zip bin
