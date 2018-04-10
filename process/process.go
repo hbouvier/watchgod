@@ -1,12 +1,19 @@
-package watchgod
+package process
 
 import (
 	"log"
 	"os"
 	"os/exec"
+	"runtime"
 	"syscall"
 )
 
+func init() {
+	runtime.GOMAXPROCS(1)
+	runtime.LockOSThread()
+}
+
+// Spawn ...
 func Spawn(tokens []string) (int, error) {
 	cmd, lookError := exec.LookPath(tokens[0])
 	if lookError != nil {
@@ -14,15 +21,15 @@ func Spawn(tokens []string) (int, error) {
 		return 0, lookError
 	}
 
-	var sys_attr syscall.SysProcAttr
-	var proc_attr syscall.ProcAttr
-	proc_attr.Sys = &sys_attr
-	proc_attr.Env = os.Environ()
-	proc_attr.Files = []uintptr{uintptr(syscall.Stdin),
+	var sysAttr syscall.SysProcAttr
+	var procAttr syscall.ProcAttr
+	procAttr.Sys = &sysAttr
+	procAttr.Env = os.Environ()
+	procAttr.Files = []uintptr{uintptr(syscall.Stdin),
 		uintptr(syscall.Stdout),
 		uintptr(syscall.Stderr)}
 
-	pid, forkError := syscall.ForkExec(cmd, tokens, &proc_attr)
+	pid, forkError := syscall.ForkExec(cmd, tokens, &procAttr)
 	if forkError != nil {
 		log.Printf("[ERROR] [process] Spwan.syscall.ForkExec(%s) >>> %s\n", cmd, forkError)
 		return 0, forkError
@@ -30,6 +37,7 @@ func Spawn(tokens []string) (int, error) {
 	return pid, nil
 }
 
+// Wait ...
 func Wait(pid int) (int, error) {
 	var wstat syscall.WaitStatus
 	_, err := syscall.Wait4(pid, &wstat, 0, nil)
@@ -46,6 +54,7 @@ func Wait(pid int) (int, error) {
 	return status, nil
 }
 
+// Kill ...
 func Kill(pid int, signal syscall.Signal) error {
 	err := syscall.Kill(pid, signal)
 	if err != nil {

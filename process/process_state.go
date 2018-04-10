@@ -1,18 +1,26 @@
-package watchgod
+package process
 
 import "fmt"
 
+// ProcessState ...
 type ProcessState int
 
 const ( // iota is reset to 0
+	// DEAD ...
 	DEAD ProcessState = 1 << iota
+	// ALREADYDEAD ...
 	ALREADYDEAD
+	// RUNNING ...
 	RUNNING
+	// STOPPED ...
 	STOPPED
+	// TIMEOUT ...
 	TIMEOUT
+	// ERROR ...
 	ERROR
 )
 
+// String ...
 func (state ProcessState) String() string {
 	var s string
 	switch state {

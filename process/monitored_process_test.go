@@ -1,4 +1,4 @@
-package watchgod
+package process
 
 import (
 	"testing"
@@ -24,8 +24,8 @@ func TestStartProcess(t *testing.T) {
 	process.start(monitor)
 	processInfo := <-monitor
 
-	if processInfo.state != RUNNING {
-		t.Fatalf("Start process state is not RUNNING >>> %s", processInfo.state)
+	if processInfo.State != RUNNING {
+		t.Fatalf("Start process state is not RUNNING >>> %s", processInfo.State)
 	}
 	if processInfo.pid <= 0 {
 		t.Fatalf("Start process PID is not greater than zero >>> %d", processInfo.pid)
@@ -39,13 +39,13 @@ func TestStartAndDieProcess(t *testing.T) {
 	process.start(monitor)
 
 	processInfo := <-monitor
-	if processInfo.state != RUNNING {
-		t.Fatalf("Start process state is not RUNNING >>> %s", processInfo.state)
+	if processInfo.State != RUNNING {
+		t.Fatalf("Start process state is not RUNNING >>> %s", processInfo.State)
 	}
 
 	processInfo = process.waitForNextEvent(defaultMonitor, 1)
-	if processInfo.state != DEAD {
-		t.Fatalf("Process did not died within one second (%s)", processInfo.state)
+	if processInfo.State != DEAD {
+		t.Fatalf("Process did not died within one second (%s)", processInfo.State)
 	}
 }
 
@@ -56,13 +56,13 @@ func TestStartAndStableProcess(t *testing.T) {
 	process.start(monitor)
 
 	processInfo := <-monitor
-	if processInfo.state != RUNNING {
-		t.Fatalf("Start process state is not RUNNING >>> %s", processInfo.state)
+	if processInfo.State != RUNNING {
+		t.Fatalf("Start process state is not RUNNING >>> %s", processInfo.State)
 	}
 
 	processInfo = process.waitForNextEvent(defaultMonitor, 2)
-	if processInfo.state != TIMEOUT {
-		t.Fatalf("Process probably died (%s), expected TIMEOUT", processInfo.state)
+	if processInfo.State != TIMEOUT {
+		t.Fatalf("Process probably died (%s), expected TIMEOUT", processInfo.State)
 	}
 }
 
@@ -73,12 +73,12 @@ func TestStartAndKillProcess(t *testing.T) {
 	process.start(monitor)
 
 	processInfo := <-monitor
-	if processInfo.state != RUNNING {
-		t.Fatalf("Start process state is not RUNNING >>> %s", processInfo.state)
+	if processInfo.State != RUNNING {
+		t.Fatalf("Start process state is not RUNNING >>> %s", processInfo.State)
 	}
 	process.stop(monitor)
 	processInfo = <-defaultMonitor
-	if processInfo.state != DEAD {
-		t.Fatalf("Process probably died (%s), expected TIMEOUT", processInfo.state)
+	if processInfo.State != DEAD {
+		t.Fatalf("Process probably died (%s), expected TIMEOUT", processInfo.State)
 	}
 }

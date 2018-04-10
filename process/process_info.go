@@ -1,10 +1,11 @@
-package watchgod
+package process
 
+// ProcessInfo ...
 type ProcessInfo struct {
-	id             string
-	state          ProcessState
+	ID             string
+	State          ProcessState
 	pid            int
-	requestId      int
+	requestID      int
 	exitcode       int
 	pauseInSeconds int
 	err            error

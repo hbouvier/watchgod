@@ -1,9 +1,11 @@
-package watchgod
+package process
 
 import (
 	"syscall"
 	"testing"
 )
+
+//go:generate fungen -package process -types string
 
 func TestProcessSpawnFailure(t *testing.T) {
 	_, err := Spawn([]string{"/does_not_exist"})

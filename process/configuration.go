@@ -1,4 +1,4 @@
-package watchgod
+package process
 
 import (
 	"encoding/json"
@@ -9,16 +9,18 @@ import (
 // When starting a process Wait on it to see if it will exit int
 // that time. If it does return an error, otherwise assume that it
 // is stable.
-var gStartTimeoutInSeconds int = 1
-var gStopTimeoutInSeconds int = 5
-var gIPCServerURL string = "127.0.0.1:7099"
-var gLogLevel string = "INFO"
+var gStartTimeoutInSeconds = 1
+var gStopTimeoutInSeconds = 5
+var gIPCServerURL = "127.0.0.1:7099"
+var gLogLevel = "INFO"
 
+// Process ...
 type Process struct {
 	Name    string
 	Command []string
 }
 
+// Configuration ...
 type Configuration struct {
 	LogLevel              string
 	IPCServerURL          string
@@ -27,19 +29,25 @@ type Configuration struct {
 	Processes             []Process
 }
 
+// DefaultConfiguration ...
 func DefaultConfiguration() Configuration {
+	ipcURL := os.Getenv("IPC_SERVER_URL")
+	if ipcURL == "" {
+		ipcURL = gIPCServerURL
+	}
 	return Configuration{StartTimeoutInSeconds: gStartTimeoutInSeconds,
 		StopTimeoutInSeconds: gStopTimeoutInSeconds,
-		IPCServerURL:         gIPCServerURL,
+		IPCServerURL:         ipcURL,
 		LogLevel:             gLogLevel,
 		Processes:            make([]Process, 0)}
 }
 
+// LoadConfiguration ...
 func LoadConfiguration(filename string) Configuration {
 	log.Printf("[INFO][watchgod] Loading %s\n", filename)
 	file, fileErr := os.Open(filename)
 	if fileErr != nil {
-		Fatal("%s: ERROR loading configuration file %s >>> %s\n", os.Args[0], filename, fileErr)
+		log.Fatalf("%s: ERROR loading configuration file %s >>> %s\n", os.Args[0], filename, fileErr)
 	}
 	defer file.Close()
 
@@ -47,7 +55,7 @@ func LoadConfiguration(filename string) Configuration {
 	configuration := DefaultConfiguration()
 	decoderErr := decoder.Decode(&configuration)
 	if decoderErr != nil {
-		Fatal("%s: ERROR decoding configuration file %s >>> %s\n", os.Args[0], filename, decoderErr)
+		log.Fatalf("%s: ERROR decoding configuration file %s >>> %s\n", os.Args[0], filename, decoderErr)
 	}
 	return configuration
 }

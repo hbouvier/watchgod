@@ -1,7 +1,6 @@
-package watchgod
+package process
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -18,9 +17,10 @@ var (
 // Config
 var (
 	windowInSeconds    int64 = 60
-	exitCountThreshold int   = 5
+	exitCountThreshold       = 5
 )
 
+// MonitoredProcess ...
 type MonitoredProcess struct {
 	id             string
 	arguments      []string
@@ -28,7 +28,7 @@ type MonitoredProcess struct {
 	state          ProcessState
 	epochStarted   int64
 	exitCount      int
-	requestId      int
+	requestID      int
 	ripperChannels []chan ProcessInfo
 	mutex          *sync.Mutex
 }
@@ -41,28 +41,28 @@ func newProcess(id string, arguments []string, ripperChannel chan ProcessInfo) M
 		ripperChannels: ripperChannels,
 		epochStarted:   0,
 		exitCount:      0,
-		requestId:      0,
+		requestID:      0,
 		mutex:          &sync.Mutex{}}
 }
 
 func (p *MonitoredProcess) start(monitor chan ProcessInfo) {
 	if p.state != DEAD && p.state != STOPPED {
-		stateErr := errors.New(fmt.Sprintf("[ERROR] %-20s(%6d) process is not in DEAD state (%s)",
-			p.id, p.pid, p.state))
-		monitor <- ProcessInfo{id: p.id, requestId: p.requestId, state: ERROR, exitcode: 0, err: stateErr}
+		stateErr := fmt.Errorf("[ERROR] %-20s(%6d) process is not in DEAD state (%s)",
+			p.id, p.pid, p.state)
+		monitor <- ProcessInfo{ID: p.id, requestID: p.requestID, State: ERROR, exitcode: 0, err: stateErr}
 		return
 	}
 
 	pid, spawnErr := Spawn(p.arguments)
 	if spawnErr != nil {
 		pauseInSeconds := p.updateExitCount()
-		monitor <- ProcessInfo{id: p.id, requestId: p.requestId, state: DEAD, exitcode: 0, err: spawnErr, pauseInSeconds: pauseInSeconds}
+		monitor <- ProcessInfo{ID: p.id, requestID: p.requestID, State: DEAD, exitcode: 0, err: spawnErr, pauseInSeconds: pauseInSeconds}
 		return
 	}
 	p.pid = pid
-	p.requestId = pid // Ensure uniquness
+	p.requestID = pid // Ensure uniquness
 	p.state = RUNNING
-	monitor <- ProcessInfo{id: p.id, requestId: p.requestId, state: RUNNING, pid: pid, exitcode: 0, err: nil}
+	monitor <- ProcessInfo{ID: p.id, requestID: p.requestID, State: RUNNING, pid: pid, exitcode: 0, err: nil}
 
 	go func() {
 		exitcode, waitErr := Wait(pid)
@@ -70,7 +70,7 @@ func (p *MonitoredProcess) start(monitor chan ProcessInfo) {
 		log.Printf("[INFO] [watchgod] %s: PID %d exit code %d", p.id, p.pid, exitcode)
 		p.pid = 0
 		p.state = DEAD
-		processInfo := ProcessInfo{id: p.id, requestId: p.requestId, state: DEAD, pid: pid, exitcode: exitcode, err: waitErr, pauseInSeconds: pauseInSeconds}
+		processInfo := ProcessInfo{ID: p.id, requestID: p.requestID, State: DEAD, pid: pid, exitcode: exitcode, err: waitErr, pauseInSeconds: pauseInSeconds}
 		monitor <- processInfo
 		p.sendToLastRipperChannel(processInfo)
 	}()
@@ -81,10 +81,9 @@ func (p *MonitoredProcess) stop(monitor chan ProcessInfo) {
 		p.resetExitCount()
 		Kill(p.pid, syscall.SIGTERM)
 	} else {
-		err := errors.New(
-			fmt.Sprintf("[ERROR] %-20s(%6d) Process pid %d must be greater than zero and state '%s' must be RUNNING",
-				p.id, p.pid, p.pid, p.state))
-		monitor <- ProcessInfo{id: p.id, state: ALREADYDEAD, pid: p.pid, requestId: p.requestId, exitcode: 0, err: err}
+		err := fmt.Errorf("[ERROR] %-20s(%6d) Process pid %d must be greater than zero and state '%s' must be RUNNING",
+			p.id, p.pid, p.pid, p.state)
+		monitor <- ProcessInfo{ID: p.id, State: ALREADYDEAD, pid: p.pid, requestID: p.requestID, exitcode: 0, err: err}
 	}
 }
 
@@ -99,9 +98,9 @@ func (p *MonitoredProcess) waitForNextEvent(monitor chan ProcessInfo, timeoutInS
 	case processInfo := <-monitor:
 		return processInfo
 	case <-timeoutChannel:
-		return ProcessInfo{id: p.id, requestId: p.requestId, state: TIMEOUT, pid: p.pid, exitcode: 0, err: nil}
+		return ProcessInfo{ID: p.id, requestID: p.requestID, State: TIMEOUT, pid: p.pid, exitcode: 0, err: nil}
 	}
-	return ProcessInfo{id: p.id, requestId: p.requestId, state: ERROR, exitcode: 0, pid: p.pid, err: errors.New("UNEXPECTED CASE")}
+	// UNREACHABLE
 }
 
 func (p *MonitoredProcess) interceptRipperChannel(ripperChannel chan ProcessInfo) {
@@ -136,13 +135,13 @@ func (p *MonitoredProcess) resetExitCount() {
 }
 
 func (p *MonitoredProcess) updateExitCount() int {
-	var nowInNanos int64 = time.Now().UnixNano()
-	var pauseInSeconds int = 0
+	var nowInNanos = time.Now().UnixNano()
+	var pauseInSeconds int
 	p.mutex.Lock()
 	if p.epochStarted == 0 {
 		p.exitCount = 1
 	} else if (nowInNanos-p.epochStarted)/nanosToMillis/millisToSecs < windowInSeconds {
-		p.exitCount += 1
+		p.exitCount++
 		if p.exitCount >= exitCountThreshold {
 			pauseInSeconds = p.exitCount
 		}

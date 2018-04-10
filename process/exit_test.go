@@ -1,4 +1,4 @@
-package watchgod
+package process
 
 import "testing"
 

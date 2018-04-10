@@ -1,27 +1,37 @@
-package watchgod
+package process
 
 import "fmt"
 
+// EventType ...
 type EventType int
 
 const ( // iota is reset to 0
-	CREATE  EventType = 1 << iota // New process without starting it
-	START                         // Start an already created process
-	STOP                          // Stop a running process
-	RESTART                       // Restart a running or stopped process
+	// CREATE a new process without starting it
+	CREATE EventType = 1 << iota
+
+	// START  an already created process
+	START
+	// STOP  a running process
+	STOP
+	// RESTART a running or stopped process
+	RESTART
+	// LIST ...
 	LIST
-	TERMINATE // Terminate the Watch GO Deamon (and all processes)
+	// TERMINATE the Watch GO Deamon (and all processes)
+	TERMINATE
 )
 
+// Event ...
 type Event struct {
 	id        string
 	arguments []string
 	eventType EventType
 	exitcode  int
-	requestId int
+	requestID int
 	response  chan RPCResponse
 }
 
+// String ...
 func (event EventType) String() string {
 	var s string
 	switch event {
