@@ -8,7 +8,7 @@ ID=$$
 VERSION=$(cat VERSION.txt)
 REGISTRY=hbouvier
 
-GIT_COMMIT_REV:=$(shell git rev-parse HEAD)
+GIT_COMMIT_REV=$(git rev-parse HEAD)
 GIT_COMMIT_REV_SHORT=$(git rev-parse --short HEAD)
 GIT_COMMIT_MESSAGE_RAW=$(git log --oneline | head -1 | cut -f2- -d' ')
 GIT_COMMIT_MESSAGE=$(echo ${GIT_COMMIT_MESSAGE_RAW} | tr -dc '[:print:]' | sed 's/"//g' | sed "s/'//g")
@@ -22,20 +22,29 @@ RELEASE=$(curl "https://api.github.com/repos/hbouvier/watchgod/releases" \
                --header "Content-Type: application/json; charset=UTF-8" \
                -d @/tmp/watchgod.${ID}.json)
 RELEASE_ID=$(echo ${RELEASE} | jq '.id')
+
 echo "\tRELEASE_ID=${RELEASE_ID}"
 
 cd release/bin
-for ARCH in $(find . -type d -print | grep -vE '^.$') ; do
+for ARCH in $(find . -type d -print | grep -vE '^.$'  | sed 's/^.\///g') ; do
   cd ${ARCH}
   echo "\tcompressing watchgod-${ARCH}-v${VERSION}-${GIT_COMMIT_REV_SHORT}.zip"
-  zip -9 ../../watchgod-${ARCH}-v${VERSION}-${GIT_COMMIT_REV_SHORT}.zip watchgod
-  cd ..
-  ASSET=$(curl "https://uploads.github.com/repos/hbouvier/watchgod/releases/${RELEASE_ID}/assets?name=watchgod-${ARCH}-v${VERSION}-${GIT_COMMIT_REV_SHORT}.zip" \
+  zip -9 watchgod-${ARCH}-v${VERSION}-${GIT_COMMIT_REV_SHORT}.zip watchgod
+  ASSET=$(curl "https://uploads.github.com/repos/hbouvier/watchgod/releases/${RELEASE_ID}/assets?name=watchgod-${ARCH}-v${VERSION}-${GIT_COMMIT_REV_SHORT}.zip&raw=true" \
               -sXPOST \
               --header "Authorization: token ${GITHUB_TOKEN}" \
-              --header "Content-Type: application/zip" \
-              --form "file=@./watchgod-${ARCH}-v${VERSION}-${GIT_COMMIT_REV_SHORT}.zip")
-  echo "\tuploading release ${ASSET}"
+              --header "Content-Type: application/octet-stream" \
+              --data-binary @./watchgod-${ARCH}-v${VERSION}-${GIT_COMMIT_REV_SHORT}.zip)
+  echo "\tuploading zip ${ASSET}"
+  tar -czf watchgod-${ARCH}-v${VERSION}-${GIT_COMMIT_REV_SHORT}.tar.gz watchgod
+  ASSET=$(curl "https://uploads.github.com/repos/hbouvier/watchgod/releases/${RELEASE_ID}/assets?name=watchgod-${ARCH}-v${VERSION}-${GIT_COMMIT_REV_SHORT}.tar.gz&raw=true" \
+              -sXPOST \
+              --header "Authorization: token ${GITHUB_TOKEN}" \
+              --header "Content-Type: application/octet-stream" \
+              --data-binary @./watchgod-${ARCH}-v${VERSION}-${GIT_COMMIT_REV_SHORT}.tar.gz)
+  echo "\tuploading tarball ${ASSET}"
+  cd ..
+
 done
 cd ..
 echo "\tOK"
