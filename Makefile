@@ -36,30 +36,34 @@ coverage:
 	${GOCC} tool cover -html=coverage.out
 
 get-deps:
+	${GOCC} install github.com/kulshekhar/fungen
 	${GOCC} get github.com/hashicorp/logutils \
 	            github.com/kulshekhar/fungen \
 				github.com/opencontainers/runc/libcontainer/user \
 				github.com/opencontainers/runc/libcontainer/system
 
-
 linux:
+	# GOOS=linux GOARCH=amd64 CGO_ENABLED=0 ${GOCC} install github.com/kulshekhar/fungen
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 ${GOCC} install ${INSTALL_FLAGS} github.com/${USERNAME}/${PROJECTNAME}
 	@if [[ $(shell uname | tr '[:upper:]' '[:lower:]') == $@ ]] ; then mkdir -p ${GOPATH}/bin/$@_amd64 && mv ${GOPATH}/bin/${PROJECTNAME} ${GOPATH}/bin/$@_amd64/ ; fi
 	# Pass from 9.4M to 5.9M when using `-ldflags="-s -w"` and then to 1.7M when also using `upx -f --brute`
 	# go build -ldflags="-s -w" watchgod.go
 	# upx -f --brute watchgod
-	-docker run -ti -v ${GOPATH}:/go golang /bin/sh -c "apt-get -y update && apt-get install -y upx && cd src/github.com/${USERNAME}/${PROJECTNAME} && go build -ldflags='-s -w -X main.version=${VERSION}' ${PROJECTNAME}.go && upx -f --brute ${PROJECTNAME}"
-	-mv ${PROJECTNAME} ${GOPATH}/bin/$@_amd64/
+	docker run -ti -v ${GOPATH}:/go golang /bin/sh -c "apt-get -y update && apt-get install -y upx && cd src/github.com/${USERNAME}/${PROJECTNAME} && go build -ldflags='-s -w -X main.version=${VERSION}' ${PROJECTNAME}.go && upx -f --brute ${PROJECTNAME}"
+	mv ${PROJECTNAME} ${GOPATH}/bin/$@_amd64/
 
 darwin:
+	# GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 ${GOCC} install github.com/kulshekhar/fungen
 	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 ${GOCC} install ${INSTALL_FLAGS} github.com/${USERNAME}/${PROJECTNAME}
 	@if [[ $(shell uname | tr '[:upper:]' '[:lower:]') == $@ ]] ; then mkdir -p ${GOPATH}/bin/$@_amd64 && mv ${GOPATH}/bin/${PROJECTNAME} ${GOPATH}/bin/$@_amd64/ ; fi
 
 arm:
+	# GOOS=linux GOARCH=arm CGO_ENABLED=0 ${GOCC} install github.com/kulshekhar/fungen
 	GOOS=linux GOARCH=arm CGO_ENABLED=0 ${GOCC} install ${INSTALL_FLAGS} github.com/${USERNAME}/${PROJECTNAME}
 	@if [[ $(shell uname | tr '[:upper:]' '[:lower:]') == $@ ]] ; then mkdir -p ${GOPATH}/bin/$@_amd64 && mv ${GOPATH}/bin/${PROJECTNAME} ${GOPATH}/bin/$@_amd64/ ; fi
 
 windows:
+	# GOOS=windows GOARCH=amd64 CGO_ENABLED=0 ${GOCC} install github.com/kulshekhar/fungen
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 ${GOCC} install ${INSTALL_FLAGS} github.com/${USERNAME}/${PROJECTNAME}
 	@if [[ $(shell uname | tr '[:upper:]' '[:lower:]') == $@ ]] ; then mkdir -p ${GOPATH}/bin/$@_amd64 && mv ${GOPATH}/bin/${PROJECTNAME}.exe ${GOPATH}/bin/$@_amd64/ ; fi
 
@@ -72,9 +76,14 @@ windows:
 
 release: linux darwin arm
 	@mkdir -p release/bin/{linux_amd64,darwin_amd64,linux_arm}
-	for i in linux_amd64 darwin_amd64 linux_arm; do cp ${GOPATH}/bin/$${i}/${PROJECTNAME} release/bin/$${i}/ ; done
+	for i in linux_amd64 darwin_amd64 linux_arm; do cp ${GOPATH}/bin/$${i}/${PROJECTNAME} release/bin/$${i}/; done
 	cd release && COPYFILE_DISABLE=1 tar cvzf ${PROJECTNAME}.${VERSION}.tgz bin
 	cd release && zip -r ${PROJECTNAME}.${VERSION}.zip bin
 
 info:
 	@echo "version ${VERSION}"
+
+tag-release:
+	# git tag ${VERSION}
+	# git push origin v${VERSION}
+	./upload-release.sh

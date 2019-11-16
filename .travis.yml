@@ -2,9 +2,16 @@ language: go
 
 go:
   - 1.5
+  - 1.12
+  - 1.13
 
 install:
-  - go get github.com/hashicorp/logutils
-
-script: go test -v ./libwatchgod/...
+  - go install github.com/kulshekhar/fungen
+  - go get github.com/hashicorp/logutils \
+	      github.com/kulshekhar/fungen \
+				github.com/opencontainers/runc/libcontainer/user \
+        github.com/opencontainers/runc/libcontainer/system
+  - go fmt ./...
+  - go test -v ./...
+  - go install ./...
 
